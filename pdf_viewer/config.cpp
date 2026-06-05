@@ -289,6 +289,9 @@ float DEFAULT_SEARCH_HIGHLIGHT_COLOR[3] = { 0.0f, 1.0f, 0.0f };
 float DEFAULT_LINK_HIGHLIGHT_COLOR[3] = { 0.0f, 0.0f, 1.0f };
 float DEFAULT_SYNCTEX_HIGHLIGHT_COLOR[3] = { 1.0f, 0.0f, 0.0f };
 float HIDE_SYNCTEX_HIGHLIGHT_TIMEOUT = 1.0f;
+float DEFAULT_LINK_DEST_HIGHLIGHT_COLOR[3] = { 1.0f, 1.0f, 0.0f };
+float HIDE_LINK_DEST_HIGHLIGHT_TIMEOUT = 1.0f;
+bool SHOULD_HIGHLIGHT_LINK_DEST = true;
 
 float FREETEXT_BOOKMARK_COLOR[3] = { 0.0f, 0.0f, 0.0f };
 float FREETEXT_BOOKMARK_FONT_SIZE = 8.0f;
@@ -896,6 +899,7 @@ ConfigManager::ConfigManager(const Path& default_path, const Path& auto_path, co
     add_color3(L"freetext_bookmark_color", FREETEXT_BOOKMARK_COLOR);
     add_color3(L"link_highlight_color", DEFAULT_LINK_HIGHLIGHT_COLOR);
     add_color3(L"synctex_highlight_color", DEFAULT_SYNCTEX_HIGHLIGHT_COLOR);
+    add_color3(L"link_destination_highlight_color", DEFAULT_LINK_DEST_HIGHLIGHT_COLOR);
     add_color3(L"ruler_color", RULER_COLOR);
     add_color3(L"ruler_marker_color", RULER_MARKER_COLOR);
     add_color3(L"background_color", BACKGROUND_COLOR);
@@ -918,6 +922,7 @@ ConfigManager::ConfigManager(const Path& default_path, const Path& auto_path, co
     add_color4(L"keyboard_selected_tag_text_color", KEYBOARD_SELECTED_TAG_TEXT_COLOR);
     add_color4(L"keyboard_selected_tag_background_color", KEYBOARD_SELECTED_TAG_BACKGROUND_COLRO);
     add_float(L"synctex_highlight_timeout", &HIDE_SYNCTEX_HIGHLIGHT_TIMEOUT, FloatExtras{-1.0f, 100.0f});
+    add_float(L"link_destination_highlight_timeout", &HIDE_LINK_DEST_HIGHLIGHT_TIMEOUT, FloatExtras{-1.0f, 100.0f});
     add_float(L"dark_mode_contrast", &DARK_MODE_CONTRAST, FloatExtras{0.0f, 1.0f});
     add_float(L"freetext_bookmark_font_size", &FREETEXT_BOOKMARK_FONT_SIZE, FloatExtras{0.0f, 100.0f});
     add_float(L"custom_color_contrast", &CUSTOM_COLOR_CONTRAST, FloatExtras{0.0f, 1.0f});
@@ -960,6 +965,7 @@ ConfigManager::ConfigManager(const Path& default_path, const Path& auto_path, co
     add_bool(L"flat_toc", &FLAT_TABLE_OF_CONTENTS);
     add_bool(L"adjust_annotation_colors_for_dark_mode", &ADJUST_ANNOTATION_COLORS_FOR_DARK_MODE);
     add_bool(L"right_click_context_menu", &SHOW_RIGHT_CLICK_CONTEXT_MENU);
+    add_bool(L"highlight_link_destination", &SHOULD_HIGHLIGHT_LINK_DEST);
     add_bool(L"preserve_image_colors_in_dark_mode", &PRESERVE_IMAGE_COLORS);
     add_bool(L"inverted_preserved_image_colors", &INVERTED_PRESERVED_IMAGE_COLORS);
     add_bool(L"invert_selected_text", &INVERT_SELECTED_TEXT);

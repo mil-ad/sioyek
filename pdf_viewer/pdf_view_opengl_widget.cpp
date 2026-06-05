@@ -69,6 +69,7 @@ extern std::wstring RULER_DISPLAY_MODE;
 extern float RULER_COLOR[3];
 extern float RULER_MARKER_COLOR[3];
 extern float HIDE_SYNCTEX_HIGHLIGHT_TIMEOUT;
+extern float HIDE_LINK_DEST_HIGHLIGHT_TIMEOUT;
 extern bool ADJUST_ANNOTATION_COLORS_FOR_DARK_MODE;
 extern bool HIDE_OVERLAPPING_LINK_LABELS;
 extern bool PRESERVE_IMAGE_COLORS;
@@ -82,6 +83,7 @@ extern int NUM_PRERENDERED_PREV_SLIDES;
 extern float DEFAULT_SEARCH_HIGHLIGHT_COLOR[3];
 extern float DEFAULT_LINK_HIGHLIGHT_COLOR[3];
 extern float DEFAULT_SYNCTEX_HIGHLIGHT_COLOR[3];
+extern float DEFAULT_LINK_DEST_HIGHLIGHT_COLOR[3];
 extern float DEFAULT_TEXT_HIGHLIGHT_COLOR[3];
 extern float DEFAULT_VERTICAL_LINE_COLOR[4];
 extern float KEYBOARD_SELECTED_TAG_TEXT_COLOR[4];
@@ -1549,6 +1551,16 @@ void PdfViewOpenGLWidget::my_render(QPainter* painter) {
         }
     }
 
+    if (should_show_link_dest_highlights()) {
+
+        std::array<float, 3> link_dest_highlight_color = cc3(DEFAULT_LINK_DEST_HIGHLIGHT_COLOR);
+        glUniform3fv(shared_gl_objects.highlight_color_uniform_location, 1, &link_dest_highlight_color[0]);
+        glUniform1f(shared_gl_objects.highlight_opacity_uniform_location, 0.3f);
+        for (auto link_dest_hl_rect : link_dest_highlights) {
+            render_highlight_document(shared_gl_objects.highlight_program, link_dest_hl_rect, HRF_FILL | HRF_BORDER);
+        }
+    }
+
 
 
     if (document_view->should_show_text_selection_marker) {
@@ -2060,8 +2072,14 @@ void PdfViewOpenGLWidget::set_synctex_highlights(std::vector<DocumentRect> highl
     synctex_highlights = std::move(highlights);
 }
 
+void PdfViewOpenGLWidget::set_link_dest_highlights(std::vector<DocumentRect> highlights) {
+    link_dest_highlight_time = QTime::currentTime();
+    link_dest_highlights = std::move(highlights);
+}
+
 void PdfViewOpenGLWidget::on_document_view_reset() {
     this->synctex_highlights.clear();
+    this->link_dest_highlights.clear();
 }
 
 PdfViewOpenGLWidget::~PdfViewOpenGLWidget() {
@@ -3502,6 +3520,23 @@ bool PdfViewOpenGLWidget::should_show_synxtex_highlights() {
 bool PdfViewOpenGLWidget::has_synctex_timed_out() {
     if (synctex_highlights.size() > 0 && (!should_show_synxtex_highlights())) {
         synctex_highlights.clear();
+        return true;
+    }
+    return false;
+}
+
+bool PdfViewOpenGLWidget::should_show_link_dest_highlights() {
+    if (link_dest_highlights.size() > 0) {
+        if ((HIDE_LINK_DEST_HIGHLIGHT_TIMEOUT < 0) || (link_dest_highlight_time.msecsTo(QTime::currentTime()) < (HIDE_LINK_DEST_HIGHLIGHT_TIMEOUT * 1000.0f))) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool PdfViewOpenGLWidget::link_dest_highlight_timed_out() {
+    if (link_dest_highlights.size() > 0 && (!should_show_link_dest_highlights())) {
+        link_dest_highlights.clear();
         return true;
     }
     return false;

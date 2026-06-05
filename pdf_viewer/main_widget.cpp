@@ -275,6 +275,7 @@ extern UIRect LANDSCAPE_MIDDLE_RIGHT_UI_RECT;
 
 extern bool PAPER_DOWNLOAD_CREATE_PORTAL;
 extern bool ALIGN_LINK_DEST_TO_TOP;
+extern bool SHOULD_HIGHLIGHT_LINK_DEST;
 extern bool USE_KEYBOARD_POINT_SELECTION;
 
 extern bool TOUCH_MODE;
@@ -1223,6 +1224,10 @@ MainWidget::MainWidget(fz_context* mupdf_context,
         }
 
         if (opengl_widget->has_synctex_timed_out()) {
+            is_render_invalidated = true;
+        }
+
+        if (opengl_widget->link_dest_highlight_timed_out()) {
             is_render_invalidated = true;
         }
 
@@ -4752,7 +4757,7 @@ void MainWidget::handle_link_click(const PdfLink& link) {
         goto_page_with_page_number(page);
     }
     else {
-        handle_goto_link_with_page_and_offset(page, offset_y);
+        handle_goto_link_with_page_and_offset(page, offset_y, offset_x);
     }
 }
 
@@ -6493,7 +6498,7 @@ void MainWidget::handle_open_link(const std::wstring& text, bool copy) {
                     goto_page_with_page_number(page - 1);
                 }
                 else {
-                    handle_goto_link_with_page_and_offset(page - 1, offset_y);
+                    handle_goto_link_with_page_and_offset(page - 1, offset_y, offset_x);
                 }
             }
         }
@@ -11031,12 +11036,81 @@ void MainWidget::clear_keyboard_select_highlights() {
     opengl_widget->set_should_highlight_words(false);
 }
 
-void MainWidget::handle_goto_link_with_page_and_offset(int page, float y_offset) {
+void MainWidget::handle_goto_link_with_page_and_offset(int page, float y_offset, float x_offset) {
     long_jump_to_destination(page, y_offset);
     if (ALIGN_LINK_DEST_TO_TOP) {
         float top_offset = (main_document_view->get_view_height() / main_document_view->get_zoom_level()) / 2.0f;
         main_document_view->move_absolute(0, top_offset);
     }
+    highlight_link_destination(page, x_offset, y_offset);
+}
+
+void MainWidget::highlight_link_destination(int page, float doc_offset_x, float doc_offset_y) {
+    if (!SHOULD_HIGHLIGHT_LINK_DEST) {
+        return;
+    }
+    if ((page < 0) || (page >= doc()->num_pages())) {
+        return;
+    }
+
+    // A link destination is only an anchor point, so reconstruct a region to flash
+    // by finding the text line at that point.
+    const std::vector<AbsoluteRect>& line_rects = doc()->get_page_lines(page);
+    if (line_rects.size() == 0) {
+        return;
+    }
+
+    AbsoluteDocumentPos anchor = DocumentPos{ page, doc_offset_x, doc_offset_y }.to_absolute(doc());
+
+    auto vertical_center = [](const AbsoluteRect& line) { return (line.y0 + line.y1) / 2.0f; };
+    auto horizontal_distance = [&](const AbsoluteRect& line) {
+        if (anchor.x < line.x0) return line.x0 - anchor.x;
+        if (anchor.x > line.x1) return anchor.x - line.x1;
+        return 0.0f;
+    };
+
+    // A destination scrolls its anchor point to the top of the view, so the line we
+    // want is the topmost one at or below the anchor (the nearest-center line tends
+    // to land one line too high). Lines sharing a visual row are disambiguated by
+    // horizontal distance, which picks the correct column in a two-column reference
+    // list when the destination carries an x coordinate.
+    int best = -1;
+    for (int i = 0; i < (int)line_rects.size(); i++) {
+        const AbsoluteRect& line = line_rects[i];
+        if (line.y1 < anchor.y) {
+            continue; // entirely above the anchor
+        }
+        if (best < 0) {
+            best = i;
+            continue;
+        }
+        float row_tolerance = std::max((line.y1 - line.y0) / 2.0f, 1.0f);
+        float delta = vertical_center(line) - vertical_center(line_rects[best]);
+        if (std::abs(delta) <= row_tolerance) {
+            if (horizontal_distance(line) < horizontal_distance(line_rects[best])) {
+                best = i; // same row, nearer column
+            }
+        }
+        else if (delta < 0) {
+            best = i; // higher up, i.e. closer to the anchor
+        }
+    }
+
+    // The anchor can sit below all text (e.g. a link into a figure); fall back to
+    // the vertically nearest line so there is still a visible cue.
+    if (best < 0) {
+        float min_distance = std::numeric_limits<float>::max();
+        for (int i = 0; i < (int)line_rects.size(); i++) {
+            float distance = std::abs(anchor.y - vertical_center(line_rects[i]));
+            if (distance < min_distance) {
+                min_distance = distance;
+                best = i;
+            }
+        }
+    }
+
+    opengl_widget->set_link_dest_highlights({ line_rects[best].to_document(doc()) });
+    invalidate_render();
 }
 
 QString MainWidget::execute_macro_sync(QString macro) {
