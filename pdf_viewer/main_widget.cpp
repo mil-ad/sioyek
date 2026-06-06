@@ -275,6 +275,7 @@ extern UIRect LANDSCAPE_MIDDLE_RIGHT_UI_RECT;
 
 extern bool PAPER_DOWNLOAD_CREATE_PORTAL;
 extern bool ALIGN_LINK_DEST_TO_TOP;
+extern bool SHOULD_HIGHLIGHT_LINK_DEST;
 extern bool USE_KEYBOARD_POINT_SELECTION;
 
 extern bool TOUCH_MODE;
@@ -1223,6 +1224,10 @@ MainWidget::MainWidget(fz_context* mupdf_context,
         }
 
         if (opengl_widget->has_synctex_timed_out()) {
+            is_render_invalidated = true;
+        }
+
+        if (opengl_widget->link_dest_highlight_timed_out()) {
             is_render_invalidated = true;
         }
 
@@ -4752,7 +4757,7 @@ void MainWidget::handle_link_click(const PdfLink& link) {
         goto_page_with_page_number(page);
     }
     else {
-        handle_goto_link_with_page_and_offset(page, offset_y);
+        handle_goto_link_with_page_and_offset(page, offset_y, offset_x);
     }
 }
 
@@ -6493,7 +6498,7 @@ void MainWidget::handle_open_link(const std::wstring& text, bool copy) {
                     goto_page_with_page_number(page - 1);
                 }
                 else {
-                    handle_goto_link_with_page_and_offset(page - 1, offset_y);
+                    handle_goto_link_with_page_and_offset(page - 1, offset_y, offset_x);
                 }
             }
         }
@@ -11031,12 +11036,84 @@ void MainWidget::clear_keyboard_select_highlights() {
     opengl_widget->set_should_highlight_words(false);
 }
 
-void MainWidget::handle_goto_link_with_page_and_offset(int page, float y_offset) {
+void MainWidget::handle_goto_link_with_page_and_offset(int page, float y_offset, float x_offset) {
     long_jump_to_destination(page, y_offset);
     if (ALIGN_LINK_DEST_TO_TOP) {
         float top_offset = (main_document_view->get_view_height() / main_document_view->get_zoom_level()) / 2.0f;
         main_document_view->move_absolute(0, top_offset);
     }
+    highlight_link_destination(page, x_offset, y_offset);
+}
+
+void MainWidget::highlight_link_destination(int page, float doc_offset_x, float doc_offset_y) {
+    if (!SHOULD_HIGHLIGHT_LINK_DEST) {
+        return;
+    }
+    if ((page < 0) || (page >= doc()->num_pages())) {
+        return;
+    }
+
+    // A link destination is only an anchor point, so reconstruct a region to flash
+    // by finding the text line at that point.
+    const std::vector<AbsoluteRect>& line_rects = doc()->get_page_lines(page);
+    if (line_rects.size() == 0) {
+        return;
+    }
+
+    AbsoluteDocumentPos anchor = DocumentPos{ page, doc_offset_x, doc_offset_y }.to_absolute(doc());
+
+    auto vertical_center = [](const AbsoluteRect& line) { return (line.y0 + line.y1) / 2.0f; };
+
+    // A destination scrolls its anchor point to the top of the view, so the row we
+    // want is the topmost text line at or below the anchor. We test a line's center
+    // (not its bottom edge) so that a line the anchor merely clips from above - e.g.
+    // the tail of the previous reference entry - is not mistaken for the target.
+    int best = -1;
+    for (int i = 0; i < (int)line_rects.size(); i++) {
+        const AbsoluteRect& line = line_rects[i];
+        if (vertical_center(line) < anchor.y) {
+            continue; // centered above the anchor
+        }
+        if ((best < 0) || (vertical_center(line) < vertical_center(line_rects[best]))) {
+            best = i;
+        }
+    }
+
+    // The anchor can sit below all text (e.g. a link into a figure); fall back to
+    // the vertically nearest line so there is still a visible cue.
+    if (best < 0) {
+        float min_distance = std::numeric_limits<float>::max();
+        for (int i = 0; i < (int)line_rects.size(); i++) {
+            float distance = std::abs(anchor.y - vertical_center(line_rects[i]));
+            if (distance < min_distance) {
+                min_distance = distance;
+                best = i;
+            }
+        }
+    }
+
+    // PDF link destinations only encode a left-margin x, not which column the target
+    // is in, so we cannot reliably pick a single column. Instead highlight the whole
+    // row across the page width, expanded to cover every line that overlaps the
+    // chosen line's row (the columns of a two-column layout are usually slightly
+    // misaligned vertically).
+    const AbsoluteRect& chosen = line_rects[best];
+    DocumentRect chosen_doc = chosen.to_document(doc());
+    float band_y0 = chosen_doc.rect.y0;
+    float band_y1 = chosen_doc.rect.y1;
+    for (const AbsoluteRect& line : line_rects) {
+        bool overlaps_row = (line.y0 <= chosen.y1) && (chosen.y0 <= line.y1);
+        if (overlaps_row) {
+            DocumentRect line_doc = line.to_document(doc());
+            band_y0 = std::min(band_y0, line_doc.rect.y0);
+            band_y1 = std::max(band_y1, line_doc.rect.y1);
+        }
+    }
+
+    float page_width = doc()->get_page_width(page);
+    DocumentRect band(fz_rect{ 0.0f, band_y0, page_width, band_y1 }, page);
+    opengl_widget->set_link_dest_highlights({ band });
+    invalidate_render();
 }
 
 QString MainWidget::execute_macro_sync(QString macro) {

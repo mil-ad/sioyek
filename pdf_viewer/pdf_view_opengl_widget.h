@@ -222,6 +222,10 @@ public:
     std::vector<DocumentRect> word_rects;
     std::vector<DocumentRect> synctex_highlights;
     QTime synctex_highlight_time;
+    std::vector<DocumentRect> link_dest_highlights;
+    QTime link_dest_highlight_time;
+    int link_dest_highlight_page = -1;
+    bool link_dest_highlight_clock_started = false;
     std::vector<MarkedDataRect> marked_data_rects;
 
     PdfViewOpenGLWidget(DocumentView* document_view, PdfRenderer* pdf_renderer, ConfigManager* config_manager, bool is_helper, QWidget* parent = nullptr);
@@ -259,6 +263,9 @@ public:
     void set_synctex_highlights(std::vector<DocumentRect> highlights);
     bool should_show_synxtex_highlights();
     bool has_synctex_timed_out();
+    void set_link_dest_highlights(std::vector<DocumentRect> highlights);
+    bool should_show_link_dest_highlights();
+    bool link_dest_highlight_timed_out();
     void on_document_view_reset();
     void mouseMoveEvent(QMouseEvent* mouse_event) override;
     void mousePressEvent(QMouseEvent* mevent) override;
