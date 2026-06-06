@@ -1081,6 +1081,14 @@ void PdfViewOpenGLWidget::render_page(int page_number, bool in_overview, ColorPa
             is_helper_waiting_for_render = true;
         }
 
+        // Start the link-destination highlight's fade clock once its page is first
+        // drawn with a real texture, so the flash and its timeout line up with the
+        // content becoming visible rather than the (possibly slow) navigation.
+        if ((!in_overview) && texture && (page_number == link_dest_highlight_page) && (!link_dest_highlight_clock_started)) {
+            link_dest_highlight_time = QTime::currentTime();
+            link_dest_highlight_clock_started = true;
+        }
+
 
         // when rotating, we swap nv and nh 
         int nh_ = nh;
@@ -2073,13 +2081,22 @@ void PdfViewOpenGLWidget::set_synctex_highlights(std::vector<DocumentRect> highl
 }
 
 void PdfViewOpenGLWidget::set_link_dest_highlights(std::vector<DocumentRect> highlights) {
-    link_dest_highlight_time = QTime::currentTime();
     link_dest_highlights = std::move(highlights);
+    link_dest_highlight_page = link_dest_highlights.size() > 0 ? link_dest_highlights[0].page : -1;
+    // The fade clock starts only once the destination page is actually rendered (see
+    // render_page) - otherwise the highlight flashes on a still-blank page and can
+    // fade out before the text appears. This timestamp records when the highlight was
+    // requested; it doubles as a deadline so a highlight whose page never renders
+    // (e.g. the user navigates away) is dropped instead of lingering to flash later.
+    link_dest_highlight_time = QTime::currentTime();
+    link_dest_highlight_clock_started = false;
 }
 
 void PdfViewOpenGLWidget::on_document_view_reset() {
     this->synctex_highlights.clear();
     this->link_dest_highlights.clear();
+    this->link_dest_highlight_page = -1;
+    this->link_dest_highlight_clock_started = false;
 }
 
 PdfViewOpenGLWidget::~PdfViewOpenGLWidget() {
@@ -3526,7 +3543,7 @@ bool PdfViewOpenGLWidget::has_synctex_timed_out() {
 }
 
 bool PdfViewOpenGLWidget::should_show_link_dest_highlights() {
-    if (link_dest_highlights.size() > 0) {
+    if (link_dest_highlights.size() > 0 && link_dest_highlight_clock_started) {
         if ((HIDE_LINK_DEST_HIGHLIGHT_TIMEOUT < 0) || (link_dest_highlight_time.msecsTo(QTime::currentTime()) < (HIDE_LINK_DEST_HIGHLIGHT_TIMEOUT * 1000.0f))) {
             return true;
         }
@@ -3535,8 +3552,22 @@ bool PdfViewOpenGLWidget::should_show_link_dest_highlights() {
 }
 
 bool PdfViewOpenGLWidget::link_dest_highlight_timed_out() {
-    if (link_dest_highlights.size() > 0 && (!should_show_link_dest_highlights())) {
+    if (link_dest_highlights.size() == 0) {
+        return false;
+    }
+
+    // Once shown, the highlight is done when its fade timeout elapses. While still
+    // waiting for the page to render, give up after a fixed deadline so a highlight
+    // whose page never appears does not linger and flash later.
+    constexpr int MAX_WAIT_FOR_RENDER_MS = 3000;
+    bool finished = link_dest_highlight_clock_started
+        ? !should_show_link_dest_highlights()
+        : link_dest_highlight_time.msecsTo(QTime::currentTime()) > MAX_WAIT_FOR_RENDER_MS;
+
+    if (finished) {
         link_dest_highlights.clear();
+        link_dest_highlight_page = -1;
+        link_dest_highlight_clock_started = false;
         return true;
     }
     return false;

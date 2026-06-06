@@ -11063,36 +11063,19 @@ void MainWidget::highlight_link_destination(int page, float doc_offset_x, float 
     AbsoluteDocumentPos anchor = DocumentPos{ page, doc_offset_x, doc_offset_y }.to_absolute(doc());
 
     auto vertical_center = [](const AbsoluteRect& line) { return (line.y0 + line.y1) / 2.0f; };
-    auto horizontal_distance = [&](const AbsoluteRect& line) {
-        if (anchor.x < line.x0) return line.x0 - anchor.x;
-        if (anchor.x > line.x1) return anchor.x - line.x1;
-        return 0.0f;
-    };
 
-    // A destination scrolls its anchor point to the top of the view, so the line we
-    // want is the topmost one at or below the anchor (the nearest-center line tends
-    // to land one line too high). Lines sharing a visual row are disambiguated by
-    // horizontal distance, which picks the correct column in a two-column reference
-    // list when the destination carries an x coordinate.
+    // A destination scrolls its anchor point to the top of the view, so the row we
+    // want is the topmost text line at or below the anchor. We test a line's center
+    // (not its bottom edge) so that a line the anchor merely clips from above - e.g.
+    // the tail of the previous reference entry - is not mistaken for the target.
     int best = -1;
     for (int i = 0; i < (int)line_rects.size(); i++) {
         const AbsoluteRect& line = line_rects[i];
-        if (line.y1 < anchor.y) {
-            continue; // entirely above the anchor
+        if (vertical_center(line) < anchor.y) {
+            continue; // centered above the anchor
         }
-        if (best < 0) {
+        if ((best < 0) || (vertical_center(line) < vertical_center(line_rects[best]))) {
             best = i;
-            continue;
-        }
-        float row_tolerance = std::max((line.y1 - line.y0) / 2.0f, 1.0f);
-        float delta = vertical_center(line) - vertical_center(line_rects[best]);
-        if (std::abs(delta) <= row_tolerance) {
-            if (horizontal_distance(line) < horizontal_distance(line_rects[best])) {
-                best = i; // same row, nearer column
-            }
-        }
-        else if (delta < 0) {
-            best = i; // higher up, i.e. closer to the anchor
         }
     }
 
@@ -11109,7 +11092,27 @@ void MainWidget::highlight_link_destination(int page, float doc_offset_x, float 
         }
     }
 
-    opengl_widget->set_link_dest_highlights({ line_rects[best].to_document(doc()) });
+    // PDF link destinations only encode a left-margin x, not which column the target
+    // is in, so we cannot reliably pick a single column. Instead highlight the whole
+    // row across the page width, expanded to cover every line that overlaps the
+    // chosen line's row (the columns of a two-column layout are usually slightly
+    // misaligned vertically).
+    const AbsoluteRect& chosen = line_rects[best];
+    DocumentRect chosen_doc = chosen.to_document(doc());
+    float band_y0 = chosen_doc.rect.y0;
+    float band_y1 = chosen_doc.rect.y1;
+    for (const AbsoluteRect& line : line_rects) {
+        bool overlaps_row = (line.y0 <= chosen.y1) && (chosen.y0 <= line.y1);
+        if (overlaps_row) {
+            DocumentRect line_doc = line.to_document(doc());
+            band_y0 = std::min(band_y0, line_doc.rect.y0);
+            band_y1 = std::max(band_y1, line_doc.rect.y1);
+        }
+    }
+
+    float page_width = doc()->get_page_width(page);
+    DocumentRect band(fz_rect{ 0.0f, band_y0, page_width, band_y1 }, page);
+    opengl_widget->set_link_dest_highlights({ band });
     invalidate_render();
 }
 

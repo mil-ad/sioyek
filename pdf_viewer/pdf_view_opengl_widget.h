@@ -224,6 +224,8 @@ public:
     QTime synctex_highlight_time;
     std::vector<DocumentRect> link_dest_highlights;
     QTime link_dest_highlight_time;
+    int link_dest_highlight_page = -1;
+    bool link_dest_highlight_clock_started = false;
     std::vector<MarkedDataRect> marked_data_rects;
 
     PdfViewOpenGLWidget(DocumentView* document_view, PdfRenderer* pdf_renderer, ConfigManager* config_manager, bool is_helper, QWidget* parent = nullptr);
