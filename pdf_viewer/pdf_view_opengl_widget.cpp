@@ -5,6 +5,7 @@
 #include <qapplication.h>
 #include <qdatetime.h>
 #include <qfile.h>
+#include <qimage.h>
 
 #include "pdf_view_opengl_widget.h"
 #include "path.h"
@@ -1666,6 +1667,64 @@ void PdfViewOpenGLWidget::my_render(QPainter* painter) {
 
     painter->endNativePainting();
 
+    // Render Supernote overlays for visible pages (.mark files or PNG exports)
+    // Supernote screen is 1404x1872 pixels (or 1920x2560 for X2 devices).
+    // It scales PDFs to fit within the screen while maintaining aspect ratio,
+    // centering the content with padding on the shorter dimension.
+    for (auto page : visible_pages) {
+        bool use_inverted = (color_mode == ColorPalette::Dark || color_mode == ColorPalette::Custom);
+        const QPixmap* overlay = use_inverted
+            ? document_view->get_document()->get_supernote_overlay_inverted(page)
+            : document_view->get_document()->get_supernote_overlay(page);
+        if (!overlay) {
+            continue;
+        }
+
+        // Get overlay dimensions (from the pixmap itself)
+        float supernote_width = static_cast<float>(overlay->width());
+        float supernote_height = static_cast<float>(overlay->height());
+
+        // Get the page dimensions
+        float page_width = document_view->get_document()->get_page_width(page);
+        float page_height = document_view->get_document()->get_page_height(page);
+
+        // Calculate how Supernote would render this PDF page:
+        // It scales to fit while maintaining aspect ratio, then centers.
+        float pdf_aspect = page_height / page_width;
+        float supernote_aspect = supernote_height / supernote_width;
+
+        // Calculate the source rectangle in the overlay (where the PDF content is)
+        QRect source_rect;
+        if (pdf_aspect <= supernote_aspect) {
+            // PDF is relatively wider - scale to fit width, center vertically
+            float scaled_pdf_height = supernote_width * pdf_aspect;
+            float vertical_padding = (supernote_height - scaled_pdf_height) / 2.0f;
+            source_rect = QRect(0, qRound(vertical_padding),
+                               overlay->width(),
+                               qRound(scaled_pdf_height));
+        } else {
+            // PDF is relatively taller - scale to fit height, center horizontally
+            float scaled_pdf_width = supernote_height / pdf_aspect;
+            float horizontal_padding = (supernote_width - scaled_pdf_width) / 2.0f;
+            source_rect = QRect(qRound(horizontal_padding), 0,
+                               qRound(scaled_pdf_width),
+                               overlay->height());
+        }
+
+        // Get the target page rectangle in window coordinates
+        PagelessDocumentRect page_rect({0, 0, page_width, page_height});
+        DocumentRect doc_rect(page_rect, page);
+        WindowRect window_rect = doc_rect.to_window(document_view);
+
+        QRect target_rect(window_rect.x0, window_rect.y0,
+                         window_rect.x1 - window_rect.x0,
+                         window_rect.y1 - window_rect.y0);
+
+        // Draw the overlay with transparency
+        painter->setOpacity(0.8);
+        painter->drawPixmap(target_rect, *overlay, source_rect);
+        painter->setOpacity(1.0);
+    }
 
     if (document_view->get_document()->can_use_highlights()) {
         const std::vector<BookMark>& bookmarks = document_view->get_document()->get_bookmarks();

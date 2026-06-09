@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <optional>
 #include <string>
 #include <variant>
 #include <mupdf/fitz.h>

@@ -6,9 +6,11 @@
 #include <thread>
 #include <mutex>
 #include <map>
+#include <set>
 #include <unordered_map>
 #include <deque>
 #include <regex>
+#include <memory>
 
 //#include <Windows.h>
 #include <qstandarditemmodel.h>
@@ -22,6 +24,7 @@
 
 #include "book.h"
 #include "coordinates.h"
+#include "mark_parser.h"
 
 class CachedChecksummer;
 class DatabaseManager;
@@ -70,6 +73,17 @@ private:
     // which means that when we exit, we must write the modified drawings to the drawings file
     bool is_drawings_dirty = false;
     bool is_annotations_dirty = false;
+
+    // PNG overlays for Supernote-style annotations (foo.pdf_0.png, foo.pdf_1.png, etc.)
+    std::map<int, QPixmap> page_png_overlays;
+    std::set<int> png_pages_checked_;
+
+    // Cached inverted overlays for dark/custom color modes
+    std::map<int, QPixmap> inverted_overlay_cache;
+
+    // .mark file parser for direct Supernote annotation support
+    std::unique_ptr<MarkFileParser> mark_parser;
+    bool mark_file_loaded = false;
 
     std::vector<Mark> marks;
     std::vector<BookMark> bookmarks;
@@ -423,6 +437,15 @@ public:
     const std::vector<FreehandDrawing>& get_page_drawings(int page);
     AbsoluteRect to_absolute(int page, fz_quad quad);
     AbsoluteRect to_absolute(int page, PagelessDocumentRect rect);
+
+    // .mark file support for direct Supernote annotation loading
+    void load_mark_file();
+
+    // Combined overlay support (tries .mark first, then PNG)
+    // Returns nullptr if no overlay exists for this page
+    const QPixmap* get_supernote_overlay(int page);
+    // Returns the inverted version for dark/custom color modes (cached)
+    const QPixmap* get_supernote_overlay_inverted(int page);
 
     bool get_should_reload_annotations();
     void reload_annotations_on_new_checksum();

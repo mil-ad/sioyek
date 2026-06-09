@@ -3639,6 +3639,84 @@ void Document::load_drawings() {
 
 }
 
+void Document::load_mark_file() {
+    if (mark_file_loaded) {
+        return;
+    }
+
+    mark_file_loaded = true;
+
+    // Look for foo.pdf.mark file
+    QString pdf_path = QString::fromStdWString(file_name);
+    QString mark_path = pdf_path + ".mark";
+
+    if (!QFile::exists(mark_path)) {
+        return;
+    }
+
+    mark_parser = std::make_unique<MarkFileParser>();
+    if (mark_parser->load(mark_path)) {
+        std::cerr << "[sioyek] Loaded .mark file: " << mark_path.toStdString() << std::endl;
+    } else {
+        mark_parser.reset();
+        std::cerr << "[sioyek] Failed to load .mark file: " << mark_path.toStdString() << std::endl;
+    }
+}
+
+const QPixmap* Document::get_supernote_overlay(int page) {
+    // Try .mark file first
+    if (!mark_file_loaded) {
+        load_mark_file();
+    }
+    if (mark_parser) {
+        QPixmap pixmap = mark_parser->get_page_pixmap(page);
+        if (!pixmap.isNull()) {
+            // Cache it so we can return a stable pointer
+            auto result = page_png_overlays.emplace(page, std::move(pixmap));
+            return &result.first->second;
+        }
+    }
+
+    // Then try PNG overlay (lazy per-page loading)
+    if (png_pages_checked_.find(page) == png_pages_checked_.end()) {
+        png_pages_checked_.insert(page);
+        QString pdf_path = QString::fromStdWString(file_name);
+        QString png_path = pdf_path + "_" + QString::number(page) + ".png";
+        if (QFile::exists(png_path)) {
+            QPixmap pixmap(png_path);
+            if (!pixmap.isNull()) {
+                page_png_overlays[page] = std::move(pixmap);
+            }
+        }
+    }
+
+    auto it = page_png_overlays.find(page);
+    if (it != page_png_overlays.end()) {
+        return &it->second;
+    }
+    return nullptr;
+}
+
+const QPixmap* Document::get_supernote_overlay_inverted(int page) {
+    // Check inverted cache first
+    auto it = inverted_overlay_cache.find(page);
+    if (it != inverted_overlay_cache.end()) {
+        return &it->second;
+    }
+
+    // Get the normal overlay
+    const QPixmap* overlay = get_supernote_overlay(page);
+    if (!overlay) {
+        return nullptr;
+    }
+
+    // Create and cache the inverted version
+    QImage img = overlay->toImage();
+    img.invertPixels(QImage::InvertRgb);  // Invert RGB, preserve alpha
+    inverted_overlay_cache[page] = QPixmap::fromImage(img);
+    return &inverted_overlay_cache[page];
+}
+
 void Document::persist_annotations(bool force) {
 
     if ((!is_annotations_dirty) && (!force)) {

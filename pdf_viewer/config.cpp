@@ -34,6 +34,7 @@ bool HORIZONTAL_SCROLL_PAST_PAGE_ENDS = false;
 bool SIMPLIFY_FREEHAND_DRAWINGS = true;
 bool RECTO_VERSO_ADJUSTMENT = false;
 bool KEYBOARD_SELECT_INCLUSIVE = false;
+bool SHOW_COMMAND_HINTS = false;
 
 #ifdef SIOYEK_MOBILE
 bool TOUCH_MODE = true;
@@ -52,6 +53,7 @@ bool SHOULD_RENDER_PDF_ANNOTATIONS = true;
 bool AUTOMATICALLY_DOWNLOAD_MATCHING_PAPER_NAME = true;
 bool NO_AUTO_CONFIG = false;
 bool USE_RULER_TO_HIGHLIGHT_SYNCTEX_LINE = true;
+bool HIGHLIGHT_LINK_DESTINATION = false;
 bool HIDE_OVERLAPPING_LINK_LABELS = true;
 bool DONT_FOCUS_IF_SYNCTEX_RECT_IS_VISIBLE = false;
 bool GG_USES_LABELS = false;
@@ -895,6 +897,7 @@ ConfigManager::ConfigManager(const Path& default_path, const Path& auto_path, co
     add_color3(L"freetext_bookmark_color", FREETEXT_BOOKMARK_COLOR);
     add_color3(L"link_highlight_color", DEFAULT_LINK_HIGHLIGHT_COLOR);
     add_color3(L"synctex_highlight_color", DEFAULT_SYNCTEX_HIGHLIGHT_COLOR);
+    add_color3(L"link_destination_highlight_color", DEFAULT_SYNCTEX_HIGHLIGHT_COLOR);
     add_color3(L"ruler_color", RULER_COLOR);
     add_color3(L"ruler_marker_color", RULER_MARKER_COLOR);
     add_color3(L"background_color", BACKGROUND_COLOR);
@@ -917,6 +920,7 @@ ConfigManager::ConfigManager(const Path& default_path, const Path& auto_path, co
     add_color4(L"keyboard_selected_tag_text_color", KEYBOARD_SELECTED_TAG_TEXT_COLOR);
     add_color4(L"keyboard_selected_tag_background_color", KEYBOARD_SELECTED_TAG_BACKGROUND_COLRO);
     add_float(L"synctex_highlight_timeout", &HIDE_SYNCTEX_HIGHLIGHT_TIMEOUT, FloatExtras{-1.0f, 100.0f});
+    add_float(L"link_destination_highlight_timeout", &HIDE_SYNCTEX_HIGHLIGHT_TIMEOUT, FloatExtras{-1.0f, 100.0f});
     add_float(L"dark_mode_contrast", &DARK_MODE_CONTRAST, FloatExtras{0.0f, 1.0f});
     add_float(L"freetext_bookmark_font_size", &FREETEXT_BOOKMARK_FONT_SIZE, FloatExtras{0.0f, 100.0f});
     add_float(L"custom_color_contrast", &CUSTOM_COLOR_CONTRAST, FloatExtras{0.0f, 1.0f});
@@ -989,6 +993,7 @@ ConfigManager::ConfigManager(const Path& default_path, const Path& auto_path, co
     add_bool(L"render_pdf_annotations", &SHOULD_RENDER_PDF_ANNOTATIONS);
     add_bool(L"ruler_mode", &RULER_MODE);
     add_bool(L"use_ruler_to_highlight_synctex_line", &USE_RULER_TO_HIGHLIGHT_SYNCTEX_LINE);
+    add_bool(L"highlight_link_destination", &HIGHLIGHT_LINK_DESTINATION);
     add_bool(L"show_most_recent_commands_first", &SHOW_MOST_RECENT_COMMANDS_FIRST);
     add_bool(L"keyboard_point_selection", &USE_KEYBOARD_POINT_SELECTION);
     add_bool(L"text_summary_should_refine", &TEXT_SUMMARY_HIGHLIGHT_SHOULD_REFINE);
@@ -1040,6 +1045,7 @@ ConfigManager::ConfigManager(const Path& default_path, const Path& auto_path, co
     add_bool(L"simplify_freehand_drawings", &SIMPLIFY_FREEHAND_DRAWINGS);
     add_bool(L"recto_verso_adjustment", &RECTO_VERSO_ADJUSTMENT);
     add_bool(L"keyboard_select_inclusive", &KEYBOARD_SELECT_INCLUSIVE);
+    add_bool(L"show_command_hints", &SHOW_COMMAND_HINTS);
 
     add_string(L"google_scholar_address", &GOOGLE_SCHOLAR_ADDRESS);
     add_string(L"item_list_prefix", &ITEM_LIST_PREFIX);

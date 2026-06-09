@@ -505,7 +505,7 @@ std::vector<fz_stext_char*> reorder_stext_line(fz_stext_line* line) {
             });
     }
     else {
-        std::sort(reordered_chars.begin(), reordered_chars.end(), [](fz_stext_char* lhs, fz_stext_char* rhs) {
+        std::stable_sort(reordered_chars.begin(), reordered_chars.end(), [](fz_stext_char* lhs, fz_stext_char* rhs) {
             return (lhs->quad.lr.x <= rhs->quad.lr.x) && (lhs->quad.ll.x < rhs->quad.ll.x);
             });
     }
